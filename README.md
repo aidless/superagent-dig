@@ -20,3 +20,7 @@
 ## 许可
 
 MIT
+
+## 06 生态学习（2026-11-10）
+
+- [06-ecosystem-learning-NOTES.md](06-ecosystem-learning-NOTES.md)：四个同赛道开源项目源码级拆解（microsoft/agent-governance-toolkit、OrchestratorInc/agent-orchestrator、ruvnet/APx、microsoft/agent-framework），四项目零重叠印证赛道竞争面 = 治理与监督的确定性；综合出 superagent-build 六条升级方向（escalate 档/预算进治理/派发租约/信用门/复审熔断/symlink 加固）。
