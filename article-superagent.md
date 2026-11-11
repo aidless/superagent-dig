@@ -45,7 +45,9 @@ worker 交付报告后，规则层先查：报告里申报的 touched_paths 是�
 
 **真校准（12 个真任务：6 合规 + 3 挑逗 + 3 闲聊，独立线程）**：14 次调用全部成功，真模型在研判层幻觉过一次规则名，被 fail-closed 拦下（`hallucinated_rule`）——三铁律在真实模型上生效过，不是只在测试里。12 个 observe 事件喂进校准器，出参数 (c_false=0.5, c_speak=0.2, λ=0.05)。
 
-**也要诚实**：这批事件里 confidence 全部同质（0.533）——因为开口事件都绑在 worker 报告之后，而 watchdog 全部放行，证据向量一模一样。所以当前校准是"无冲突数据上的方向性验证"，要出真正有区分度的校准，得等 wait/drop 侧事件和坏开口样本积累起来。这是下一阶段的事。
+**也要诚实**：这批事件里 confidence 全部同质（0.533）——因为开口事件都绑在 worker 报告之后，而 watchdog 全部放行，证据向量一模一样。所以当前校准是"无冲突数据上的方向性验证"，要出真正有区分度的校准，得等 wait/drop 侧事件和坏开口样本积累起来。
+
+> **更正（见文末「续章二」）**：上面 8 runs 的 `DUAL_WINS` 与 `p* = 0.0121` 已被 32 runs 真跑复制核验推翻，不能再当作结论引用。保留原文是为了留痕：一次探路 batch 的结论长什么样，扩样后又是怎么被自己打回来的。
 
 ## 四、回头看那条短视频
 
@@ -72,4 +74,27 @@ worker 交付报告后，规则层先查：报告里申报的 touched_paths 是�
 
 ---
 
-**仓库**：[aidless/superagent-build](https://github.com/aidless/superagent-build)（自研内核，v0.3.0，99 pytest + 9 脚本套件，纯标准库）· [aidless/superagent-dig](https://github.com/aidless/superagent-dig)（拆解报告六件套，全部带 file:line 举证）· [PyPI superagent-build 0.3.0](https://pypi.org/project/superagent-build/)
+## 续章二（v0.3.2）：把自己的结论重新审了一遍
+
+第三部分的 8 runs 曾给出「治理层每 run 多花 1654 tokens、少 4 次介入、p\* = 0.0121 元/token」。扩到 **4 任务 × 4 seeds × 2 臂 = 32 runs**（16 对，全真实 usage、逐对配对），结果反过来了：
+
+| 指标 | 8 runs（探路） | 32 runs（复制核验） |
+|---|---|---|
+| ΔT（dual − single 总 token） | +1654 | **−628** |
+| 每对平均 ΔT | — | **−39.25**（噪声量级） |
+| 逐 seed 符号 | 单批同号 | **同任务内翻转**（t-l1: −128/+287/−145/+260；t-l3: −441/−180/+656/+29） |
+| 95% CI（配对重采样） | 未算 | **[−8.3339, −8.3329]**，不跨 0 |
+| p\* / c\* | 0.0121 / 8.27 | **null / null**（ΔT≤0 时无平衡点） |
+| verdict | DUAL_WINS | DUAL_WINS（但由介入计数假设 single=2、dual=1 单边驱动） |
+
+两批符号都不一致（`k1_vs_b_sign_agrees=false`），且 V 敏感性扫描里 V 从 0.001 到 20 全判 DUAL_WINS、翻面点 0.001——这说明 **V=5.0 是假设参数，不是实测的注意力价值**，所谓"CI 不跨 0"测的是这个假设，不是市场价。修正后的结论只有一句站得住：**治理链没有引入可测的 token 税**；成本账降级为「假设压力测试」，不再宣称双层省 token。9 份原始记录打成 sha256 可复算证据包，篡改一个字节就会验真失败。
+
+同一轮把整条证据链做成了机器可读规范：`GOVERNANCE.md` 用 RFC2119 写 22 条 MUST（M1..M22），每条配一个先红后绿的 conformance 测试（23 个），八个干预点里五个没做的照实留白。审的过程中抓到一个真的 fail-open：`pre_write` 在治理挂点缺位时直接 `return True`——写操作会在没有任何裁决的情况下落盘。现在它改为落 BLOCK ruling（`governance_absent`）并拒绝，且写进 `ADR-0001`，防止日后被顺手改回 fail-open。§8 还留了 11 条规范-实现差异（无 metrics 时预算闸旁路、构造级 watchdog fail-open、scopes.json 非 append-only 等），只报告不粉饰。
+
+另外三件：30 个标注任务的 assessor A/B（A 臂 recall 0.571 / mention 6/15 / 诱饵误收 0，B 臂 recall 0.286 / mention 0/15，增益真实但研判调用未入成本台账）；置信度从单键证据扩到六维 + 输入侧 wait/drop 候选后，13 条 observe 事件里终于出现 0.480 / 0.510 / 0.533 三档和 1 条人工金标 `wait_bad`，真校准出更保守的 (c_false=2.0, c_speak=0.5, λ=0.05)；发布侧把 PyPI 从 0.1.0 补到 **0.3.1**（此前本地与线上口径断裂）、写了中英发布稿与 20 问面试稿，并给上游建档开 issue。
+
+**这轮最想留下的不是任何一个数字，是那句自我推翻**：8 runs 时我写了"账算得平"，32 runs 后只能写"没测出税，账还没算平"。敢把前一版结论留着、在旁边贴更正，比悄悄删掉更有用。
+
+---
+
+**仓库**：[aidless/superagent-build](https://github.com/aidless/superagent-build)（自研内核，main HEAD v0.3.2 未发版，153 pytest + 23 conformance + 9 脚本套件，纯标准库；已发布快照 PyPI 0.3.1）· [aidless/superagent-dig](https://github.com/aidless/superagent-dig)（拆解报告六件套，全部带 file:line 举证）· [PyPI superagent-build 0.3.1](https://pypi.org/project/superagent-build/0.3.1/)
